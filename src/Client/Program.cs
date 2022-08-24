@@ -1,17 +1,38 @@
-﻿using System;
+﻿using Server;
+using System;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Client
 {
+
+	class UdpUser : UdpBase
+	{
+		private UdpUser() { }
+
+		public static UdpUser ConnectTo(string hostname, int port)
+		{
+			var connection = new UdpUser();
+			connection.Client.Connect(hostname, port);
+			return connection;
+		}
+
+		public void Send(string message)
+		{
+			var datagram = Encoding.ASCII.GetBytes(message);
+			Client.Send(datagram, datagram.Length);
+		}
+
+	}
 	class Program
 	{
 		static void Main(string[] args)
 		{
 			//default or set in args
-			int PORT_NO = 1988;
+			int PORT_NO = 32123;
 			string SERVER_IP = "127.0.0.1";
 			if (args.Any())
 			{
@@ -28,28 +49,38 @@ namespace Client
 				{
 					Console.WriteLine(ip.ToString());
 				}
-			}	
+			}
 
 			Console.WriteLine($"\nConnecting to {SERVER_IP} {PORT_NO} ...");
 
-			//---data to send to the server---
-			string textToSend = DateTime.Now.ToString();
+			var client = UdpUser.ConnectTo(SERVER_IP, PORT_NO);
 
-			//---create a TCPClient object at the IP and port no.---
-			TcpClient client = new TcpClient(SERVER_IP, PORT_NO);
-			NetworkStream nwStream = client.GetStream();
-			byte[] bytesToSend = ASCIIEncoding.ASCII.GetBytes(textToSend);
+			//wait for reply messages from server and send them to console 
+			Task.Factory.StartNew(async () =>
+			{
+				while (true)
+				{
+					try
+					{
+						var received = await client.Receive();
+						Console.WriteLine(received.Message);
+						if (received.Message.Contains("quit"))
+							break;
+					}
+					catch (Exception ex)
+					{
+						Console.Write(ex);
+					}
+				}
+			});
 
-			//---send the text---
-			Console.WriteLine("Sending : " + textToSend);
-			nwStream.Write(bytesToSend, 0, bytesToSend.Length);
-
-			//---read back the text---
-			byte[] bytesToRead = new byte[client.ReceiveBufferSize];
-			int bytesRead = nwStream.Read(bytesToRead, 0, client.ReceiveBufferSize);
-			Console.WriteLine("Received : " + Encoding.ASCII.GetString(bytesToRead, 0, bytesRead));
-			Console.ReadLine();
-			client.Close();
+			//type ahead :-)
+			string read;
+			do
+			{
+				read = Console.ReadLine();
+				client.Send(read);
+			} while (read != "quit");
 		}
 	}
 }

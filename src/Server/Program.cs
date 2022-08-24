@@ -4,15 +4,64 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace Server
 {
+	public struct Received
+	{
+		public IPEndPoint Sender;
+		public string Message;
+	}
+
+	public abstract class UdpBase
+	{
+		protected UdpClient Client;
+
+		protected UdpBase()
+		{
+			Client = new UdpClient();
+		}
+
+		public async Task<Received> Receive()
+		{
+			var result = await Client.ReceiveAsync();
+			return new Received()
+			{
+				Message = Encoding.ASCII.GetString(result.Buffer, 0, result.Buffer.Length),
+				Sender = result.RemoteEndPoint
+			};
+		}
+	}
+
+	class UdpListener : UdpBase
+	{
+		private IPEndPoint _listenOn;
+
+		public UdpListener() : this(new IPEndPoint(IPAddress.Any, 32123))
+		{
+		}
+
+		public UdpListener(IPEndPoint endpoint)
+		{
+			_listenOn = endpoint;
+			Client = new UdpClient(_listenOn);
+		}
+
+		public void Reply(string message, IPEndPoint endpoint)
+		{
+			var datagram = Encoding.ASCII.GetBytes(message);
+			Client.Send(datagram, datagram.Length, endpoint);
+		}
+
+	}
+
 	class Program
 	{
 		static void Main(string[] args)
 		{
 			//default or set in args
-			int PORT_NO = 1988;
+			int PORT_NO = 32123;
 			IPAddress SERVER_IP = IPAddress.Any;
 			if (args.Any())
 			{
@@ -31,29 +80,21 @@ namespace Server
 				}
 			}
 
-			TcpListener listener = new TcpListener(SERVER_IP, PORT_NO);
+			var server = new UdpListener();
 			Console.WriteLine($"\nListening in {SERVER_IP} {PORT_NO} ...");
-			listener.Start();
 
-			//---incoming client connected---
-			TcpClient client = listener.AcceptTcpClient();
-			Console.WriteLine("Connected " + ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString());
-			//---get the incoming data through a network stream---
-			NetworkStream nwStream = client.GetStream();
-			byte[] buffer = new byte[client.ReceiveBufferSize];
 
-			//---read incoming stream---
-			int bytesRead = nwStream.Read(buffer, 0, client.ReceiveBufferSize);
+			//start listening for messages and copy the messages back to the client
+			Task.Factory.StartNew(async () => {
+				while (true)
+				{
+					var received = await server.Receive();
+					server.Reply("copy " + received.Message, received.Sender);
+					if (received.Message == "quit")
+						break;
+				}
+			});
 
-			//---convert the data received into a string---
-			string dataReceived = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-			Console.WriteLine("Received : " + dataReceived);
-
-			//---write back the text to the client---
-			Console.WriteLine("Sending back : " + dataReceived);
-			nwStream.Write(buffer, 0, bytesRead);
-			client.Close();
-			listener.Stop();
 			Console.ReadLine();
 		}
 	}
