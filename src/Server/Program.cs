@@ -52,6 +52,7 @@ namespace Server
 			//---write back the text to the client---
 			Console.WriteLine("Sending back : " + dataReceived);
 			nwStream.Write(buffer, 0, bytesRead);
+
 			client.Close();
 			listener.Stop();
 			Console.ReadLine();

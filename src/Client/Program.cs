@@ -49,6 +49,12 @@ namespace Client
 			int bytesRead = nwStream.Read(bytesToRead, 0, client.ReceiveBufferSize);
 			Console.WriteLine("Received : " + Encoding.ASCII.GetString(bytesToRead, 0, bytesRead));
 			Console.ReadLine();
+
+			//---send the 2nd text---
+			bytesToSend = ASCIIEncoding.ASCII.GetBytes("ok bye");
+			Console.WriteLine("Sending : " + textToSend);
+			nwStream.Write(bytesToSend, 0, bytesToSend.Length);
+
 			client.Close();
 		}
 	}
